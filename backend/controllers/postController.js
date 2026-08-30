@@ -5,25 +5,15 @@ const Post = require("../models/Post");
 const getPosts = async (req, res) => {
   try {
     const posts = await Post.find()
-      .populate(
-        "author",
-        "username profilePicture bio"
-      )
-      .populate(
-        "comments.author",
-        "username profilePicture"
-      )
-      .sort({
-        createdAt: -1,
-      });
+      .populate("author", "username profilePicture bio")
+      .populate("likes", "username profilePicture")
+      .populate("comments.author", "username profilePicture")
+      .sort({ createdAt: -1 });
 
     res.status(200).json(posts);
   } catch (error) {
     console.error("Get posts error:", error);
-
-    res.status(500).json({
-      message: "Unable to fetch posts.",
-    });
+    res.status(500).json({ message: "Unable to fetch posts." });
   }
 };
 
@@ -33,56 +23,41 @@ const getPost = async (req, res) => {
     const { id } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({
-        message: "Invalid post ID.",
-      });
+      return res.status(400).json({ message: "Invalid post ID." });
     }
 
     const post = await Post.findById(id)
-      .populate(
-        "author",
-        "username profilePicture bio"
-      )
-      .populate(
-        "comments.author",
-        "username profilePicture"
-      );
+      .populate("author", "username profilePicture bio")
+      .populate("likes", "username profilePicture")
+      .populate("comments.author", "username profilePicture");
 
     if (!post) {
-      return res.status(404).json({
-        message: "Post not found.",
-      });
+      return res.status(404).json({ message: "Post not found." });
     }
 
     res.status(200).json(post);
   } catch (error) {
     console.error("Get single post error:", error);
-
-    res.status(500).json({
-      message: "Unable to fetch post.",
-    });
+    res.status(500).json({ message: "Unable to fetch post." });
   }
 };
 
 // CREATE POST
 const createPost = async (req, res) => {
   try {
-    const { content } = req.body;
+    const { content, image } = req.body;
 
     if (!content || !content.trim()) {
-      return res.status(400).json({
-        message: "Post content is required.",
-      });
+      return res.status(400).json({ message: "Post content is required." });
     }
 
     const post = await Post.create({
       content: content.trim(),
+      image: image ? image.trim() : "",
       author: req.user.id,
     });
 
-    const populatedPost = await Post.findById(
-      post._id
-    ).populate(
+    const populatedPost = await Post.findById(post._id).populate(
       "author",
       "username profilePicture bio"
     );
@@ -90,10 +65,7 @@ const createPost = async (req, res) => {
     res.status(201).json(populatedPost);
   } catch (error) {
     console.error("Create post error:", error);
-
-    res.status(500).json({
-      message: "Unable to create post.",
-    });
+    res.status(500).json({ message: "Unable to create post." });
   }
 };
 
@@ -101,43 +73,34 @@ const createPost = async (req, res) => {
 const updatePost = async (req, res) => {
   try {
     const { id } = req.params;
-    const { content } = req.body;
+    const { content, image } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({
-        message: "Invalid post ID.",
-      });
+      return res.status(400).json({ message: "Invalid post ID." });
     }
 
     if (!content || !content.trim()) {
-      return res.status(400).json({
-        message: "Post content is required.",
-      });
+      return res.status(400).json({ message: "Post content is required." });
     }
 
     const post = await Post.findById(id);
 
     if (!post) {
-      return res.status(404).json({
-        message: "Post not found.",
-      });
+      return res.status(404).json({ message: "Post not found." });
     }
 
-    // OWNER CHECK
     if (post.author.toString() !== req.user.id) {
-      return res.status(403).json({
-        message:
-          "You can only edit your own posts.",
-      });
+      return res.status(403).json({ message: "You can only edit your own posts." });
     }
 
     post.content = content.trim();
+    if (image !== undefined) {
+      post.image = image.trim();
+    }
 
     await post.save();
 
-    const updatedPost = await Post.findById(
-      post._id
-    ).populate(
+    const updatedPost = await Post.findById(post._id).populate(
       "author",
       "username profilePicture bio"
     );
@@ -145,10 +108,7 @@ const updatePost = async (req, res) => {
     res.status(200).json(updatedPost);
   } catch (error) {
     console.error("Update post error:", error);
-
-    res.status(500).json({
-      message: "Unable to update post.",
-    });
+    res.status(500).json({ message: "Unable to update post." });
   }
 };
 
@@ -158,38 +118,25 @@ const deletePost = async (req, res) => {
     const { id } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({
-        message: "Invalid post ID.",
-      });
+      return res.status(400).json({ message: "Invalid post ID." });
     }
 
     const post = await Post.findById(id);
 
     if (!post) {
-      return res.status(404).json({
-        message: "Post not found.",
-      });
+      return res.status(404).json({ message: "Post not found." });
     }
 
-    // OWNER CHECK
     if (post.author.toString() !== req.user.id) {
-      return res.status(403).json({
-        message:
-          "You can only delete your own posts.",
-      });
+      return res.status(403).json({ message: "You can only delete your own posts." });
     }
 
     await Post.findByIdAndDelete(id);
 
-    res.status(200).json({
-      message: "Post deleted successfully.",
-    });
+    res.status(200).json({ message: "Post deleted successfully." });
   } catch (error) {
     console.error("Delete post error:", error);
-
-    res.status(500).json({
-      message: "Unable to delete post.",
-    });
+    res.status(500).json({ message: "Unable to delete post." });
   }
 };
 
@@ -199,31 +146,20 @@ const toggleLike = async (req, res) => {
     const { id } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({
-        message: "Invalid post ID.",
-      });
+      return res.status(400).json({ message: "Invalid post ID." });
     }
 
     const post = await Post.findById(id);
 
     if (!post) {
-      return res.status(404).json({
-        message: "Post not found.",
-      });
+      return res.status(404).json({ message: "Post not found." });
     }
 
     const userId = req.user.id;
-
-    const alreadyLiked = post.likes.some(
-      (likeId) =>
-        likeId.toString() === userId
-    );
+    const alreadyLiked = post.likes.some((likeId) => likeId.toString() === userId);
 
     if (alreadyLiked) {
-      post.likes = post.likes.filter(
-        (likeId) =>
-          likeId.toString() !== userId
-      );
+      post.likes = post.likes.filter((likeId) => likeId.toString() !== userId);
     } else {
       post.likes.push(userId);
     }
@@ -231,22 +167,14 @@ const toggleLike = async (req, res) => {
     await post.save();
 
     const updatedPost = await Post.findById(id)
-      .populate(
-        "author",
-        "username profilePicture"
-      )
-      .populate(
-        "comments.author",
-        "username profilePicture"
-      );
+      .populate("author", "username profilePicture")
+      .populate("likes", "username profilePicture")
+      .populate("comments.author", "username profilePicture");
 
     res.status(200).json(updatedPost);
   } catch (error) {
     console.error("Like error:", error);
-
-    res.status(500).json({
-      message: "Unable to like/unlike post.",
-    });
+    res.status(500).json({ message: "Unable to like/unlike post." });
   }
 };
 
@@ -257,49 +185,32 @@ const addComment = async (req, res) => {
     const { text } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({
-        message: "Invalid post ID.",
-      });
+      return res.status(400).json({ message: "Invalid post ID." });
     }
 
     if (!text || !text.trim()) {
-      return res.status(400).json({
-        message: "Comment cannot be empty.",
-      });
+      return res.status(400).json({ message: "Comment cannot be empty." });
     }
 
     const post = await Post.findById(id);
 
     if (!post) {
-      return res.status(404).json({
-        message: "Post not found.",
-      });
+      return res.status(404).json({ message: "Post not found." });
     }
 
-    post.comments.push({
-      text: text.trim(),
-      author: req.user.id,
-    });
+    post.comments.push({ text: text.trim(), author: req.user.id });
 
     await post.save();
 
     const updatedPost = await Post.findById(id)
-      .populate(
-        "author",
-        "username profilePicture"
-      )
-      .populate(
-        "comments.author",
-        "username profilePicture"
-      );
+      .populate("author", "username profilePicture")
+      .populate("likes", "username profilePicture")
+      .populate("comments.author", "username profilePicture");
 
     res.status(201).json(updatedPost);
   } catch (error) {
     console.error("Comment error:", error);
-
-    res.status(500).json({
-      message: "Unable to add comment.",
-    });
+    res.status(500).json({ message: "Unable to add comment." });
   }
 };
 
